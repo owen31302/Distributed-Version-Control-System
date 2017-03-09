@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/quorumcloud.iml" filepath="$PROJECT_DIR$/.idea/modules/quorumcloud.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/quorumcloud_main.iml" filepath="$PROJECT_DIR$/.idea/modules/quorumcloud_main.iml" group="quorumcloud" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/quorumcloud_test.iml" filepath="$PROJECT_DIR$/.idea/modules/quorumcloud_test.iml" group="quorumcloud" />
+    </modules>
+  </component>
+</project>
