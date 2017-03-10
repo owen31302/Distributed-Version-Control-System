@@ -3,6 +3,7 @@ package com.owen31302.quorumcloud;
 import java.io.DataOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Map;
 import java.util.Scanner;
 
 /**
@@ -36,13 +37,20 @@ public class SetupServer {
                 case IDLE:
                     msg = "Please select the option:\n" +
                             "Enter 1 to perform GET\n" +
-                            "Enter 2 to perform SET\n";
+                            "Enter 2 to perform SET\n" +
+                            "Enter 3 to perform PRINTALL\n";
                     System.out.print(msg);
                     userChoice = userInput.next();
                     if(Integer.parseInt(userChoice) == 1){
                         fsm = UIFSM.GET;
                     }else if (Integer.parseInt(userChoice) == 2){
                         fsm = UIFSM.SET;
+                    }else if(Integer.parseInt(userChoice) == 3){
+                        if(ServerWorker._dataFile.isEmpty()){
+                            System.out.print("There is no files in this computer.\n");
+                        }else{
+                            fsm = UIFSM.PRINTALL;
+                        }
                     }else{
                         System.out.print("Please enter 1 or 2.\n");
                     }
@@ -50,10 +58,10 @@ public class SetupServer {
                 case GET:
                     msg = "Please enter the name of the file, or enter -1 back to the main menu:\n";
                     System.out.print(msg);
-                    userChoice = userInput.next();
-                    if (Integer.parseInt(userChoice) == -1){
+                    String filename = userInput.next();
+                    if (Integer.parseInt(filename) == -1){
                         fsm = UIFSM.IDLE;
-                    }else if(ServerWorker._dataFile.contains(userChoice)){
+                    }else if(ServerWorker._dataFile.contains(filename)){
                         // TODO
                     }else{
                         msg = "File does not exist in the system.\n";
@@ -67,7 +75,7 @@ public class SetupServer {
                     msg = "Please enter the value\n";
                     System.out.print(msg);
                     int value = Integer.parseInt(userInput.next());
-                    int timestamp = 11112;
+                    long timestamp = System.currentTimeMillis();
                     for (HostPort port : HostPort.values()) {
                         if( port.getValue() !=_serverPort && ServerWorker.hostAvailabilityCheck(port.getValue())){
                             try{
@@ -83,14 +91,15 @@ public class SetupServer {
                     }
                     fsm = UIFSM.IDLE;
                     break;
-
+                case PRINTALL:
+                    for (Map.Entry<String, SmallFile> file: ServerWorker._dataFile.entrySet()){
+                        System.out.print("File name : " + file.getKey()+"\n");
+                        System.out.print("Value : " + file.getValue().get_val()+"\n");
+                        System.out.print("timestamp : " + file.getValue().get_timestamp()+"\n");
+                    }
+                    fsm = UIFSM.IDLE;
+                    break;
             }
         }
-        /*for (HostPort port : HostPort.values()) {
-            if( port.getValue() !=_serverPort ){
-                Thread clientThread = new Thread(new Client(port.getValue()));
-                clientThread.start();
-            }
-        }*/
     }
 }

@@ -5,9 +5,9 @@ package com.owen31302.quorumcloud;
  */
 public class SmallFile {
     private int _val;
-    private int _timestamp;
+    private long _timestamp;
 
-    public SmallFile(int val, int timestamp){
+    public SmallFile(int val, long timestamp){
         this._val = val;
         this._timestamp = timestamp;
     }
@@ -15,7 +15,7 @@ public class SmallFile {
     public int get_val(){
         return _val;
     }
-    public int get_timestamp(){
+    public long get_timestamp(){
         return _timestamp;
     }
 }

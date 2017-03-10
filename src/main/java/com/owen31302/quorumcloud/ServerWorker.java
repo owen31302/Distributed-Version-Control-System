@@ -21,24 +21,23 @@ public class ServerWorker implements Runnable{
             DataOutputStream dos = new DataOutputStream (_clientSocket.getOutputStream());
             DataInputStream dis = new DataInputStream (_clientSocket.getInputStream());
 
-            String fileName = dis.readUTF();
+            String fileName = String.valueOf(dis.readUTF());
+            //switch (action){
+            //    case UIFSM.GET:
+            //        break;
+            //    case UIFSM.SET.getValue():
+            //        break;
+            //}
             System.out.print("I got: "+fileName+"\n");
             int value = Integer.parseInt(dis.readUTF());
             System.out.print("value: "+value+"\n");
-            int timestamp = Integer.parseInt(dis.readUTF());
+            long timestamp = Long.parseLong(dis.readUTF());
             System.out.print("timestamp: "+timestamp+"\n");
 
             // Add the value and timestamp to hashtable
-            if(_dataFile.contains(fileName)){
-                _dataFile.put(fileName, new SmallFile(value, timestamp));
-            }else{
-
-            }
+            _dataFile.put(fileName, new SmallFile(value, timestamp));
 
 
-            //switch (choice){
-            //    case
-            //}
 
         }catch (java.io.IOException e){
             System.out.print("ServerWorker error: "+e.toString()+"\n");
