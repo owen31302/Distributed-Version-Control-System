@@ -1,13 +1,15 @@
 package com.owen31302.quorumcloud;
 
+import java.io.Serializable;
+
 /**
  * Created by owen on 3/9/17.
  */
-public class SmallFile {
+public class VersionData implements Serializable {
     private int _val;
     private long _timestamp;
 
-    public SmallFile(int val, long timestamp){
+    public VersionData(int val, long timestamp){
         this._val = val;
         this._timestamp = timestamp;
     }
@@ -19,3 +21,4 @@ public class SmallFile {
         return _timestamp;
     }
 }
+

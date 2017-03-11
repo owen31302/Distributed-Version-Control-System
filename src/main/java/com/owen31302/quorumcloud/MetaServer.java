@@ -1,21 +1,33 @@
 package com.owen31302.quorumcloud;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Scanner;
+import java.util.Stack;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by owen on 3/9/17.
  */
-public class SimpleClient {
+public class MetaServer implements Serializable {
     public static void main(String[] args){
         Scanner userInput = new Scanner(System.in);
         UIFSM fsm  = UIFSM.IDLE;
         String msg;
         String filename;
+
+        // --- Set ConcurrentHashMap as version control database
+        ConcurrentHashMap<String, Stack<List<VersionData>>> git = new ConcurrentHashMap<String, Stack<List<VersionData>>>();
+        ObjectOutputStream oos;
+        ObjectInputStream ois;
+
+        // --- Communication between MetaServer and BackupServer
+        // -IDLE: MetaServer wait for client request & ping the BackupServer cluster for restore server when crash exist(When BackupServer doesn't response)
+        // -GET: MetaServer send the request for the latest version in the BackupServer when MetaServer crashes amd need to reboot a new MetaServer.
+        // -SET: MetaServer send the latest modified version to the BackupServer
         while(true){
             switch (fsm){
                 case IDLE:
@@ -40,14 +52,15 @@ public class SimpleClient {
                         if( hostAvailabilityCheck(port.getValue())){
                             try{
                                 Socket serverSocket = new Socket("localhost", port.getValue());
-                                DataOutputStream dos = new DataOutputStream(serverSocket.getOutputStream());
-                                dos.writeInt(RequestType.GET);
-                                dos.writeUTF(String.valueOf(filename));
+                                oos = new ObjectOutputStream(serverSocket.getOutputStream());
+                                oos.writeInt(RequestType.GET);
+                                oos.writeUTF(String.valueOf(filename));
 
-                                DataInputStream dis = new DataInputStream(serverSocket.getInputStream());
-                                Long returnTimestamp = dis.readLong();
+                                ois = new ObjectInputStream(serverSocket.getInputStream());
+                                Long returnTimestamp = ois.readLong();
 
-                                dos.close();
+                                ois.close();
+                                oos.close();
                                 serverSocket.close();
 
                                 System.out.print("Received from port " + port.getValue() + ", and timestamp is "+returnTimestamp+"\n");
@@ -72,13 +85,18 @@ public class SimpleClient {
                         if( hostAvailabilityCheck(port.getValue())){
                             try{
                                 Socket serverSocket = new Socket("localhost", port.getValue());
-                                DataOutputStream dos = new DataOutputStream(serverSocket.getOutputStream());
-                                dos.writeInt(RequestType.SET);
-                                dos.writeUTF(String.valueOf(filename));
-                                dos.writeInt(value);
-                                dos.writeLong(timestamp);
+                                oos = new ObjectOutputStream(serverSocket.getOutputStream());
+                                oos.writeInt(RequestType.SET);
 
-                                dos.close();
+                                VersionData data = new VersionData(value, timestamp);
+                                List<VersionData> datas = new LinkedList<VersionData>();
+                                datas.add(data);
+                                Stack<List<VersionData>> versionDatas = new Stack<List<VersionData>>();
+                                versionDatas.add(datas);
+                                git.put(filename, versionDatas);
+                                oos.writeObject(git);
+
+                                oos.close();
                                 serverSocket.close();
                             }catch (java.io.IOException e){
                                 System.out.print("Can not send msg to " + port.getValue() + "\n");
@@ -98,7 +116,7 @@ public class SimpleClient {
             s = new Socket("localhost", port);
             if (s.isConnected())
             {
-                DataOutputStream dos = new DataOutputStream(s.getOutputStream());
+                ObjectOutputStream dos = new ObjectOutputStream(s.getOutputStream());
                 dos.writeInt(RequestType.CHECKCONNECTION);
                 dos.close();
                 s.close();

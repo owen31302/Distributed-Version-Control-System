@@ -1,4 +1,4 @@
-package com.owen31302.quorumcloud;
+package com.owen31302.quorumcloud.past;
 
 import java.net.ServerSocket;
 import java.net.Socket;

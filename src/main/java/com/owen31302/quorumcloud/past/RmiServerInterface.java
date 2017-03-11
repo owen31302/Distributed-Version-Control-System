@@ -1,4 +1,4 @@
-package com.owen31302.quorumcloud;
+package com.owen31302.quorumcloud.past;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;

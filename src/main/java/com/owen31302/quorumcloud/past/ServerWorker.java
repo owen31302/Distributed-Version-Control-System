@@ -1,4 +1,6 @@
-package com.owen31302.quorumcloud;
+package com.owen31302.quorumcloud.past;
+import com.owen31302.quorumcloud.VersionData;
+
 import java.net.*;
 import java.io.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -9,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ServerWorker implements Runnable{
 
     private Socket _clientSocket;
-    public static ConcurrentHashMap<String, SmallFile> _dataFile = new ConcurrentHashMap<String, SmallFile>();
+    public static ConcurrentHashMap<String, VersionData> _dataFile = new ConcurrentHashMap<String, VersionData>();
 
     public ServerWorker(Socket clientSocket){
         this._clientSocket = clientSocket;
@@ -35,7 +37,7 @@ public class ServerWorker implements Runnable{
             System.out.print("timestamp: "+timestamp+"\n");
 
             // Add the value and timestamp to hashtable
-            _dataFile.put(fileName, new SmallFile(value, timestamp));
+            _dataFile.put(fileName, new VersionData(value, timestamp));
 
 
 

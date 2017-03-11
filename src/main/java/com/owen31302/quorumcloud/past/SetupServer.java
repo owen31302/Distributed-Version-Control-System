@@ -1,4 +1,8 @@
-package com.owen31302.quorumcloud;
+package com.owen31302.quorumcloud.past;
+
+import com.owen31302.quorumcloud.HostPort;
+import com.owen31302.quorumcloud.VersionData;
+import com.owen31302.quorumcloud.UIFSM;
 
 import java.io.DataOutputStream;
 import java.net.ServerSocket;
@@ -92,7 +96,7 @@ public class SetupServer {
                     fsm = UIFSM.IDLE;
                     break;
                 case PRINTALL:
-                    for (Map.Entry<String, SmallFile> file: ServerWorker._dataFile.entrySet()){
+                    for (Map.Entry<String, VersionData> file: ServerWorker._dataFile.entrySet()){
                         System.out.print("File name : " + file.getKey()+"\n");
                         System.out.print("Value : " + file.getValue().get_val()+"\n");
                         System.out.print("timestamp : " + file.getValue().get_timestamp()+"\n");
