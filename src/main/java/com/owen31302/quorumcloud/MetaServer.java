@@ -22,6 +22,7 @@ public class MetaServer implements Serializable {
         ArrayList<Long> timestamps;
         ObjectOutputStream oos;
         ObjectInputStream ois;
+        HashSet<Integer> randomPorts;
 
         // --- Communication between MetaServer and BackupServer
         // -IDLE: MetaServer wait for client request & ping the BackupServer cluster for restore server when crash exist(When BackupServer doesn't response)
@@ -52,8 +53,11 @@ public class MetaServer implements Serializable {
                     System.out.print(msg);
                     listGit = new ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>>();
                     timestamps = new ArrayList<Long>();
+
+                    // --- Select half of the random ports and get their value
+                    randomPorts = RandomPorts(HostPort.count, false);
                     for (HostPort port : HostPort.values()) {
-                        if( hostAvailabilityCheck(port.getValue())){
+                        if( randomPorts.contains( port.getValue()) && hostAvailabilityCheck(port.getValue())){
                             try{
                                 Socket serverSocket = new Socket("localhost", port.getValue());
                                 oos = new ObjectOutputStream(serverSocket.getOutputStream());
@@ -85,8 +89,9 @@ public class MetaServer implements Serializable {
                     System.out.print(msg);
                     int value = userInput.nextInt();
                     long timestamp = System.currentTimeMillis();
+                    randomPorts = RandomPorts(HostPort.count, false);
                     for (HostPort port : HostPort.values()) {
-                        if( hostAvailabilityCheck(port.getValue())){
+                        if( randomPorts.contains( port.getValue()) && hostAvailabilityCheck(port.getValue())){
                             try{
                                 Socket serverSocket = new Socket("localhost", port.getValue());
                                 oos = new ObjectOutputStream(serverSocket.getOutputStream());
@@ -186,5 +191,21 @@ public class MetaServer implements Serializable {
                 cnt++;
             }
         }
+    }
+
+    public static HashSet<Integer> RandomPorts(int size, boolean write){
+        int half;
+        if(write){
+            half = size/2 +1;
+        }else{
+            half = size/2 + size%2;
+        }
+
+        HashSet<Integer> nums = new HashSet<Integer>((int)(Math.random()*10)%size);
+
+        while(nums.size()<half){
+            nums.add(10000 + (int)(Math.random()*10)%size);
+        }
+        return nums;
     }
 }
