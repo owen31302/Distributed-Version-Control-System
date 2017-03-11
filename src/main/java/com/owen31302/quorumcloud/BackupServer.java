@@ -16,14 +16,14 @@ public class BackupServer{
         // --- Set ConcurrentHashMap as version control database
         ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
 
-        int _serverPort = 10000+Integer.parseInt(args[0]);
+        int serverPort = 10000+Integer.parseInt(args[0]);
         Long timestamp = new Long(0);
 
         // --- Setup Server --- //
         System.out.print("Server ini process.\n");
         try {
             // Register service on specific port
-            ServerSocket serverSocket = new ServerSocket(_serverPort);
+            ServerSocket serverSocket = new ServerSocket(serverPort);
             while(!serverSocket.isClosed()){
                 // Wait and accept a connection
                 Socket clientSocket = serverSocket.accept();
@@ -43,7 +43,7 @@ public class BackupServer{
                     case RequestType.CHECKCONNECTION:
                         break;
 
-                    case RequestType.GET:
+                    case RequestType.INITIALRETRIEVE:
                         oos.writeLong(timestamp);
                         oos.writeObject(git);
                         break;

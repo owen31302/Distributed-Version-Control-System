@@ -1,6 +1,7 @@
 package com.owen31302.quorumcloud;
 
 import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.*;
@@ -11,8 +12,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class MetaServer implements Serializable {
     public static void main(String[] args){
-        Scanner userInput = new Scanner(System.in);
-        UIFSM fsm  = UIFSM.GET;
+
+        UIFSM fsm  = UIFSM.INITIALRETRIEVE;
         String msg;
         String filename;
 
@@ -24,102 +25,86 @@ public class MetaServer implements Serializable {
         ObjectInputStream ois;
         HashSet<Integer> randomPorts;
 
-        // --- Communication between MetaServer and BackupServer
-        // -IDLE: MetaServer wait for client request & ping the BackupServer cluster for restore server when crash exist(When BackupServer doesn't response)
-        // -GET: MetaServer send the request for the latest version in the BackupServer when MetaServer crashes amd need to reboot a new MetaServer.
-        // -SET: MetaServer send the latest modified version to the BackupServer
-        while(true){
-            switch (fsm){
-                case IDLE:
-                    msg = "Please select the option:\n" +
-                            "Enter 1 to perform GET\n" +
-                            "Enter 2 to perform SET\n" +
-                            "Enter 3 to perform PRINTALL\n";
+        // -- MetaServer Setup
+        msg = "GET the git from the BackupServer.\n";
+        System.out.print(msg);
+        listGit = new ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>>();
+        timestamps = new ArrayList<Long>();
 
-                    System.out.print(msg);
-                    int userChoice = Integer.parseInt(userInput.next());
-                    if(userChoice == 1){
-                        fsm = UIFSM.GET;
-                    }else if (userChoice == 2){
-                        fsm = UIFSM.SET;
-                    }else if(userChoice == 3){
-                        fsm = UIFSM.PRINTALL;
-                    }else{
-                        System.out.print("Please enter 1 or 2 or 3.\n");
-                    }
-                    break;
-                case GET:
-                    msg = "GET the git from the BackupServer.\n";
-                    System.out.print(msg);
-                    listGit = new ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>>();
-                    timestamps = new ArrayList<Long>();
-
-                    // --- Select half of the random ports and get their value
-                    randomPorts = RandomPorts(HostPort.count, false);
-                    for (HostPort port : HostPort.values()) {
-                        if( randomPorts.contains( port.getValue()) && hostAvailabilityCheck(port.getValue())){
-                            try{
-                                Socket serverSocket = new Socket("localhost", port.getValue());
-                                oos = new ObjectOutputStream(serverSocket.getOutputStream());
-                                ois = new ObjectInputStream(serverSocket.getInputStream());
-                                oos.writeInt(RequestType.GET);
-                                oos.flush();
-                                timestamps.add(ois.readLong());
-                                listGit.add((ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>)ois.readObject());
-                                ois.close();
-                                oos.close();
-                                serverSocket.close();
-                            }catch (java.io.IOException e){
-                                System.out.print("Can not send msg to " + port.getValue() + "\n");
-                            }catch (java.lang.ClassNotFoundException e){
-                                System.out.print("ClassNotFoundException. \n");
-                            }
-                        }else{
-                            System.out.print("Cannot connect to " + port.getValue() + "\n");
-                        }
-                        git = checkLatestGit(timestamps, listGit);
-                    }
-                    fsm = UIFSM.IDLE;
-                    break;
-                case SET:
-                    msg = "SET: Please enter the name of the file:\n";
-                    System.out.print(msg);
-                    filename = userInput.next();
-                    msg = "Please enter the value\n";
-                    System.out.print(msg);
-                    int value = userInput.nextInt();
-                    long timestamp = System.currentTimeMillis();
-                    randomPorts = RandomPorts(HostPort.count, false);
-                    for (HostPort port : HostPort.values()) {
-                        if( randomPorts.contains( port.getValue()) && hostAvailabilityCheck(port.getValue())){
-                            try{
-                                Socket serverSocket = new Socket("localhost", port.getValue());
-                                oos = new ObjectOutputStream(serverSocket.getOutputStream());
-                                oos.writeInt(RequestType.SET);
-                                oos.writeLong(timestamp);
-
-                                VersionData data = new VersionData(value, timestamp);
-                                LinkedList<VersionData> datas = new LinkedList<VersionData>();
-                                datas.add(data);
-                                Stack<LinkedList<VersionData>> versionDatas = new Stack<LinkedList<VersionData>>();
-                                versionDatas.add(datas);
-                                git.put(filename, versionDatas);
-                                oos.writeObject(git);
-
-                                oos.close();
-                                serverSocket.close();
-                            }catch (java.io.IOException e){
-                                System.out.print("Can not send msg to " + port.getValue() + "\n");
-                            }
-                        }
-                    }
-                    fsm = UIFSM.IDLE;
-                    break;
-                case PRINTALL:
-                    MetaServer.printAllGit(git);
-                    fsm = UIFSM.IDLE;
-                    break;
+        // --- Select half of the random ports and get their value
+        randomPorts = RandomPorts(HostPort.count, false);
+        for (HostPort port : HostPort.values()) {
+            if( randomPorts.contains( port.getValue()) && hostAvailabilityCheck(port.getValue())){
+                try{
+                    Socket serverSocket = new Socket("localhost", port.getValue());
+                    oos = new ObjectOutputStream(serverSocket.getOutputStream());
+                    ois = new ObjectInputStream(serverSocket.getInputStream());
+                    oos.writeInt(RequestType.INITIALRETRIEVE);
+                    oos.flush();
+                    timestamps.add(ois.readLong());
+                    listGit.add((ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>)ois.readObject());
+                    ois.close();
+                    oos.close();
+                    serverSocket.close();
+                }catch (java.io.IOException e){
+                    System.out.print("Can not send msg to " + port.getValue() + "\n");
+                }catch (java.lang.ClassNotFoundException e){
+                    System.out.print("ClassNotFoundException. \n");
+                }
+            }else{
+                System.out.print("Cannot connect to " + port.getValue() + "\n");
             }
+            git = checkLatestGit(timestamps, listGit);
+        }
+        for(String key : git.keySet()){
+            System.out.print("Key: " + key + "\n");
+        }
+        System.out.print("Git size: " + git.size()+ "\n");
+
+        int serverPort = 12345;
+        System.out.print("Server ini process.\n");
+        try {
+            ServerSocket serverSocket = new ServerSocket(serverPort);
+            while(!serverSocket.isClosed()){
+                // Wait and accept a connection
+                Socket clientSocket = serverSocket.accept();
+                System.out.print("I got a client\n");
+
+                // Get a communication stream associated with the socket
+                ois = new ObjectInputStream(clientSocket.getInputStream());
+                oos = new ObjectOutputStream(clientSocket.getOutputStream());
+
+                // --- @GET: Send the whole list of versions to Client
+                // --- @PUSH: Received push request, check if the version is the latest one, otherwise, reject the update
+                System.out.print("Q1\n");
+                int action = ois.readInt();
+                System.out.print("Q2\n");
+                switch (action){
+                    case RequestType.GET:
+                        System.out.print("Q3\n");
+                        filename = ois.readUTF();
+                        System.out.print("filename: "+ filename +"\n");
+                        if(git.containsKey(filename)){
+                            System.out.print("File name existed. \n");
+                            oos.writeBoolean(true);
+                            oos.writeObject(git.get(filename));
+                            oos.flush();
+                            oos.close();
+                            clientSocket.close();
+                        }else{
+                            System.out.print("No such file name existed. \n");
+                            oos.writeBoolean(false);
+                            oos.flush();
+                            oos.close();
+                            clientSocket.close();
+                        }
+                        break;
+                    case RequestType.PUSH:
+                        break;
+                }
+            }
+        }catch (java.io.IOException e){
+
         }
     }
 
