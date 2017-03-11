@@ -3,10 +3,7 @@ package com.owen31302.quorumcloud;
 import java.io.*;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Scanner;
-import java.util.Stack;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -15,12 +12,14 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MetaServer implements Serializable {
     public static void main(String[] args){
         Scanner userInput = new Scanner(System.in);
-        UIFSM fsm  = UIFSM.IDLE;
+        UIFSM fsm  = UIFSM.GET;
         String msg;
         String filename;
 
         // --- Set ConcurrentHashMap as version control database
-        ConcurrentHashMap<String, Stack<List<VersionData>>> git = new ConcurrentHashMap<String, Stack<List<VersionData>>>();
+        ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
+        ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>> listGit;
+        ArrayList<Long> timestamps;
         ObjectOutputStream oos;
         ObjectInputStream ois;
 
@@ -33,43 +32,48 @@ public class MetaServer implements Serializable {
                 case IDLE:
                     msg = "Please select the option:\n" +
                             "Enter 1 to perform GET\n" +
-                            "Enter 2 to perform SET\n";
+                            "Enter 2 to perform SET\n" +
+                            "Enter 3 to perform PRINTALL\n";
+
                     System.out.print(msg);
-                    String userChoice = userInput.next();
-                    if(Integer.parseInt(userChoice) == 1){
+                    int userChoice = Integer.parseInt(userInput.next());
+                    if(userChoice == 1){
                         fsm = UIFSM.GET;
-                    }else if (Integer.parseInt(userChoice) == 2){
+                    }else if (userChoice == 2){
                         fsm = UIFSM.SET;
+                    }else if(userChoice == 3){
+                        fsm = UIFSM.PRINTALL;
                     }else{
-                        System.out.print("Please enter 1 or 2.\n");
+                        System.out.print("Please enter 1 or 2 or 3.\n");
                     }
                     break;
                 case GET:
-                    msg = "GET: Please enter the name of the file:\n";
+                    msg = "GET the git from the BackupServer.\n";
                     System.out.print(msg);
-                    filename = userInput.next();
+                    listGit = new ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>>();
+                    timestamps = new ArrayList<Long>();
                     for (HostPort port : HostPort.values()) {
                         if( hostAvailabilityCheck(port.getValue())){
                             try{
                                 Socket serverSocket = new Socket("localhost", port.getValue());
                                 oos = new ObjectOutputStream(serverSocket.getOutputStream());
-                                oos.writeInt(RequestType.GET);
-                                oos.writeUTF(String.valueOf(filename));
-
                                 ois = new ObjectInputStream(serverSocket.getInputStream());
-                                Long returnTimestamp = ois.readLong();
-
+                                oos.writeInt(RequestType.GET);
+                                oos.flush();
+                                timestamps.add(ois.readLong());
+                                listGit.add((ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>)ois.readObject());
                                 ois.close();
                                 oos.close();
                                 serverSocket.close();
-
-                                System.out.print("Received from port " + port.getValue() + ", and timestamp is "+returnTimestamp+"\n");
                             }catch (java.io.IOException e){
                                 System.out.print("Can not send msg to " + port.getValue() + "\n");
+                            }catch (java.lang.ClassNotFoundException e){
+                                System.out.print("ClassNotFoundException. \n");
                             }
                         }else{
                             System.out.print("Cannot connect to " + port.getValue() + "\n");
                         }
+                        git = checkLatestGit(timestamps, listGit);
                     }
                     fsm = UIFSM.IDLE;
                     break;
@@ -87,11 +91,12 @@ public class MetaServer implements Serializable {
                                 Socket serverSocket = new Socket("localhost", port.getValue());
                                 oos = new ObjectOutputStream(serverSocket.getOutputStream());
                                 oos.writeInt(RequestType.SET);
+                                oos.writeLong(timestamp);
 
                                 VersionData data = new VersionData(value, timestamp);
-                                List<VersionData> datas = new LinkedList<VersionData>();
+                                LinkedList<VersionData> datas = new LinkedList<VersionData>();
                                 datas.add(data);
-                                Stack<List<VersionData>> versionDatas = new Stack<List<VersionData>>();
+                                Stack<LinkedList<VersionData>> versionDatas = new Stack<LinkedList<VersionData>>();
                                 versionDatas.add(datas);
                                 git.put(filename, versionDatas);
                                 oos.writeObject(git);
@@ -103,6 +108,10 @@ public class MetaServer implements Serializable {
                             }
                         }
                     }
+                    fsm = UIFSM.IDLE;
+                    break;
+                case PRINTALL:
+                    MetaServer.printAllGit(git);
                     fsm = UIFSM.IDLE;
                     break;
             }
@@ -134,5 +143,48 @@ public class MetaServer implements Serializable {
             return false;
         }
         return true;
+    }
+
+    public static ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> checkLatestGit(ArrayList<Long> timestamps, ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>> listGit){
+        if(listGit.size() == 0){
+            return new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
+        }else if(listGit.size() == 1){
+            return listGit.get(0);
+        }
+
+        Long maxTimestamp = new Long(0);
+        int index = 0;
+        for(int i = 0; i<listGit.size(); i++){
+            if(timestamps.get(i) > maxTimestamp){
+                maxTimestamp = timestamps.get(i);
+                index = i;
+            }
+        }
+
+        return listGit.get(index);
+    }
+
+    public static void printAllGit(ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git){
+        for(Map.Entry files:git.entrySet()){
+            System.out.print("Filename: " + files.getKey() + "\n");
+
+            Object obj2 = files.getValue();
+            Stack<LinkedList<VersionData>> versions = null;
+            if(obj2 instanceof Stack){
+                versions = (Stack<LinkedList<VersionData>>)obj2;
+            }else{
+                System.out.print("Stack conversion error.\n");
+            }
+
+            int cnt = 1;
+            for(List<VersionData> version:versions){
+                for (int i = 0; i<versions.size(); i++){
+                    System.out.print("Version " + cnt + " Value: " + version.get(i).get_val() +" , " +
+                            "Timestamp: " +version.get(i).get_timestamp() +
+                            "\n");
+                }
+                cnt++;
+            }
+        }
     }
 }
