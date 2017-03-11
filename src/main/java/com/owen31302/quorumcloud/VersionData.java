@@ -9,6 +9,10 @@ public class VersionData implements Serializable {
     private int _val;
     private long _timestamp;
 
+    public VersionData(int val){
+        this._val = val;
+    }
+
     public VersionData(int val, long timestamp){
         this._val = val;
         this._timestamp = timestamp;

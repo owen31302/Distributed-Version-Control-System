@@ -14,8 +14,10 @@ public class MetaServer implements Serializable {
     public static void main(String[] args){
 
         UIFSM fsm  = UIFSM.INITIALRETRIEVE;
+        TimeStamp timestamp = new TimeStamp(new Long(0));
         String msg;
         String filename;
+        int metaServerPort = 12345;
 
         // --- Set ConcurrentHashMap as version control database
         ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
@@ -24,6 +26,7 @@ public class MetaServer implements Serializable {
         ObjectOutputStream oos;
         ObjectInputStream ois;
         HashSet<Integer> randomPorts;
+        ObjectOutputStream oosBackupServer;
 
         // -- MetaServer Setup
         msg = "GET the git from the BackupServer.\n";
@@ -54,17 +57,22 @@ public class MetaServer implements Serializable {
             }else{
                 System.out.print("Cannot connect to " + port.getValue() + "\n");
             }
-            git = checkLatestGit(timestamps, listGit);
         }
-        for(String key : git.keySet()){
-            System.out.print("Key: " + key + "\n");
+        git = checkLatestGit(timestamps, listGit, timestamp);
+        if(git == null){
+            git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
+            timestamp.set_time(System.currentTimeMillis());
         }
-        System.out.print("Git size: " + git.size()+ "\n");
+        System.out.print("Print all git\n");
+        System.out.print("Timestamp: " + timestamp.get_time()+ "\n");
+        printAllGit(git);
 
-        int serverPort = 12345;
+        // --- MetaServer is for handing user request and save the latest version list to the BackupServer
+        // --- @GET: Send the whole list of versions to Client
+        // --- @PUSH: Received push request, check if the version is the latest one, otherwise, reject the update
         System.out.print("Server ini process.\n");
         try {
-            ServerSocket serverSocket = new ServerSocket(serverPort);
+            ServerSocket serverSocket = new ServerSocket(metaServerPort);
             while(!serverSocket.isClosed()){
                 // Wait and accept a connection
                 Socket clientSocket = serverSocket.accept();
@@ -74,16 +82,13 @@ public class MetaServer implements Serializable {
                 ois = new ObjectInputStream(clientSocket.getInputStream());
                 oos = new ObjectOutputStream(clientSocket.getOutputStream());
 
-                // --- @GET: Send the whole list of versions to Client
-                // --- @PUSH: Received push request, check if the version is the latest one, otherwise, reject the update
-                System.out.print("Q1\n");
                 int action = ois.readInt();
-                System.out.print("Q2\n");
                 switch (action){
+                    case RequestType.CHECKCONNECTION:
+                        break;
+
                     case RequestType.GET:
-                        System.out.print("Q3\n");
                         filename = ois.readUTF();
-                        System.out.print("filename: "+ filename +"\n");
                         if(git.containsKey(filename)){
                             System.out.print("File name existed. \n");
                             oos.writeBoolean(true);
@@ -100,11 +105,52 @@ public class MetaServer implements Serializable {
                         }
                         break;
                     case RequestType.PUSH:
+                        filename = ois.readUTF();
+                        Stack<LinkedList<VersionData>> versionList = (Stack<LinkedList<VersionData>>)ois.readObject();
+                        if(git.containsKey(filename)){
+                            System.out.print("Update a version list.\n");
+
+                            // --- Check if the new list can be accepted to save to the main branch.
+                            // --- Use iterator to if new list contains all of the latest nodes.
+                            Iterator latestIterator = git.get(filename).iterator();
+                            Iterator newIterator = versionList.iterator();
+                            boolean mismatch = false;
+                            while (latestIterator.hasNext() && newIterator.hasNext()){
+                                LinkedList<VersionData> newList = (LinkedList<VersionData>)newIterator.next();
+                                LinkedList<VersionData> latestList = (LinkedList<VersionData>)newIterator.next();
+                                if(!(newList.getFirst().get_timestamp() == latestList.getFirst().get_timestamp())){
+                                    mismatch = true;
+                                    break;
+                                }
+                            }
+                            if(mismatch){
+                                System.out.print("Version conflict.\n");
+                                oos.writeBoolean(false);
+                                oos.flush();
+                                oos.close();
+                            }else{
+                                System.out.print("Pushed to the main branch.\n");
+                                git.put(filename, versionList);
+
+                                // --- Push to BackupServer
+                                pushToBackupServer(timestamp, git);
+                            }
+                        }else {
+                            System.out.print("Got a new version list.\n");
+                            git.put(filename, versionList);
+                            oos.writeBoolean(true);
+                            oos.flush();
+
+                            // --- Push to BackupServer
+                            pushToBackupServer(timestamp, git);
+                        }
                         break;
                 }
             }
         }catch (java.io.IOException e){
-
+            System.out.print("IOException: " + e.toString() +"\n");
+        }catch (java.lang.ClassNotFoundException e){
+            System.out.print("ClassNotFoundException: " + e.toString() +"\n");
         }
     }
 
@@ -120,33 +166,28 @@ public class MetaServer implements Serializable {
                 dos.close();
                 s.close();
             }
-        }
-        catch (UnknownHostException e)
-        {
+        }catch (UnknownHostException e){
             return false;
-        }
-        catch (IOException e) {
+        }catch (IOException e) {
             // io exception, service probably not running
             return false;
-        }
-        catch (NullPointerException e) {
+        }catch (NullPointerException e) {
             return false;
         }
         return true;
     }
 
-    public static ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> checkLatestGit(ArrayList<Long> timestamps, ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>> listGit){
+    public static ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> checkLatestGit(ArrayList<Long> timestamps, ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>> listGit, TimeStamp timestamp){
         if(listGit.size() == 0){
-            return new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
+            return null;
         }else if(listGit.size() == 1){
             return listGit.get(0);
         }
 
-        Long maxTimestamp = new Long(0);
         int index = 0;
         for(int i = 0; i<listGit.size(); i++){
-            if(timestamps.get(i) > maxTimestamp){
-                maxTimestamp = timestamps.get(i);
+            if(timestamps.get(i) > timestamp.get_time()){
+                timestamp.set_time(timestamps.get(i));
                 index = i;
             }
         }
@@ -169,8 +210,8 @@ public class MetaServer implements Serializable {
             int cnt = 1;
             for(List<VersionData> version:versions){
                 for (int i = 0; i<versions.size(); i++){
-                    System.out.print("Version " + cnt + " Value: " + version.get(i).get_val() +" , " +
-                            "Timestamp: " +version.get(i).get_timestamp() +
+                    System.out.print("Version " + cnt + " Value: " + version.get(i).get_val()+
+                            //"Timestamp: " +version.get(i).get_timestamp() +
                             "\n");
                 }
                 cnt++;
@@ -192,5 +233,26 @@ public class MetaServer implements Serializable {
             nums.add(10000 + (int)(Math.random()*10)%size);
         }
         return nums;
+    }
+
+    public static void pushToBackupServer(TimeStamp timestamp, ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git){
+        timestamp.set_time(System.currentTimeMillis());
+        HashSet<Integer> randomPorts = RandomPorts(HostPort.count, true);
+        for (HostPort port : HostPort.values()) {
+            if (randomPorts.contains(port.getValue()) && hostAvailabilityCheck(port.getValue())) {
+                try {
+                    Socket backupServerSocket = new Socket("localhost", port.getValue());
+                    ObjectOutputStream oosBackupServer = new ObjectOutputStream(backupServerSocket.getOutputStream());
+                    oosBackupServer.writeInt(RequestType.SET);
+                    oosBackupServer.writeLong(timestamp.get_time());
+                    oosBackupServer.writeObject(git);
+
+                    oosBackupServer.close();
+                    backupServerSocket.close();
+                } catch (java.io.IOException e) {
+                    System.out.print("Can not send msg to " + port.getValue() + "\n");
+                }
+            }
+        }
     }
 }
