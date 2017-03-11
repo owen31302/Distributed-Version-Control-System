@@ -26,7 +26,6 @@ public class MetaServer implements Serializable {
         ObjectOutputStream oos;
         ObjectInputStream ois;
         HashSet<Integer> randomPorts;
-        ObjectOutputStream oosBackupServer;
 
         // -- MetaServer Setup
         msg = "GET the git from the BackupServer.\n";
@@ -117,8 +116,8 @@ public class MetaServer implements Serializable {
                             boolean mismatch = false;
                             while (latestIterator.hasNext() && newIterator.hasNext()){
                                 LinkedList<VersionData> newList = (LinkedList<VersionData>)newIterator.next();
-                                LinkedList<VersionData> latestList = (LinkedList<VersionData>)newIterator.next();
-                                if(!(newList.getFirst().get_timestamp() == latestList.getFirst().get_timestamp())){
+                                LinkedList<VersionData> latestList = (LinkedList<VersionData>)latestIterator.next();
+                                if(!(newList.getFirst().get_val() == latestList.getFirst().get_val())){
                                     mismatch = true;
                                     break;
                                 }
@@ -134,6 +133,9 @@ public class MetaServer implements Serializable {
 
                                 // --- Push to BackupServer
                                 pushToBackupServer(timestamp, git);
+                                oos.writeBoolean(true);
+                                oos.flush();
+                                oos.close();
                             }
                         }else {
                             System.out.print("Got a new version list.\n");
@@ -209,7 +211,7 @@ public class MetaServer implements Serializable {
 
             int cnt = 1;
             for(List<VersionData> version:versions){
-                for (int i = 0; i<versions.size(); i++){
+                for (int i = 0; i<version.size(); i++){
                     System.out.print("Version " + cnt + " Value: " + version.get(i).get_val()+
                             //"Timestamp: " +version.get(i).get_timestamp() +
                             "\n");

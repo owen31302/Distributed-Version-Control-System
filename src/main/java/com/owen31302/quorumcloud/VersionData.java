@@ -7,22 +7,13 @@ import java.io.Serializable;
  */
 public class VersionData implements Serializable {
     private int _val;
-    private long _timestamp;
 
     public VersionData(int val){
         this._val = val;
     }
 
-    public VersionData(int val, long timestamp){
-        this._val = val;
-        this._timestamp = timestamp;
-    }
-
     public int get_val(){
         return _val;
-    }
-    public long get_timestamp(){
-        return _timestamp;
     }
 }
 

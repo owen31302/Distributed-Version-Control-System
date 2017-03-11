@@ -3,10 +3,7 @@ package com.owen31302.quorumcloud;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Scanner;
-import java.util.Stack;
+import java.util.*;
 
 /**
  * Created by owen on 3/10/17.
@@ -39,7 +36,8 @@ public class Client {
                             "Enter 1 to perform GET\n" +
                             "Enter 2 to perform WRITE\n" +
                             "Enter 3 to perform PUSH\n" +
-                            "Enter 4 to perform PRINTALL\n";
+                            "Enter 4 to perform PRINTALL\n" +
+                            "Enter 5 to perform MERGE\n";
 
                     System.out.print(msg);
                     userChoice = Integer.parseInt(userInput.next());
@@ -56,6 +54,8 @@ public class Client {
                         }
                     }else if (userChoice == 4){
                         fsm = UIFSM.PRINTALL;
+                    }else if (userChoice == 5){
+                        fsm = UIFSM.MERGE;
                     }else{
                         System.out.print("Please enter 1 - 4.\n");
                     }
@@ -73,9 +73,7 @@ public class Client {
                         oos.writeUTF(serverFileName);
                         oos.flush();
                         if(ois.readBoolean()){
-                            System.out.print("readBoolean\n");
                             files = (Stack<LinkedList<VersionData>>)ois.readObject();
-                            System.out.print("readObject\n");
                             fileName = serverFileName;
                             System.out.print("File name existed. \n");
                         }else{
@@ -159,6 +157,9 @@ public class Client {
                             msg = "Push fail.\n";
                             System.out.print(msg);
                         }
+                        ois.close();
+                        oos.close();
+                        serverSocket.close();
                     }catch (java.io.IOException e){
                         System.out.print("IOException: " + e.toString() + "\n");
                     }
@@ -173,10 +174,62 @@ public class Client {
 
                     int cnt = 1;
                     for(List<VersionData> file:files){
-                        for (int i = 0; i<files.size(); i++){
+                        for (int i = 0; i<file.size(); i++){
                             System.out.print("Version " + cnt + " Value: " + file.get(i).get_val() + "\n");
                         }
                         cnt++;
+                    }
+                    fsm = UIFSM.IDLE;
+                    break;
+                case MERGE:
+                    try {
+                        // --- Get the latest version from the server
+                        serverSocket = new Socket("localhost", metaServerPort);
+                        oos = new ObjectOutputStream(serverSocket.getOutputStream());
+                        oos.writeInt(RequestType.GET);
+                        oos.writeUTF(fileName);
+                        oos.flush();
+
+                        Stack<LinkedList<VersionData>> tempFiles = new Stack<LinkedList<VersionData>>();
+                        ois = new ObjectInputStream(serverSocket.getInputStream());
+                        if(ois.readBoolean()){
+                            tempFiles = (Stack<LinkedList<VersionData>>)ois.readObject();
+                        }else{
+                            System.out.print("File does not exist!\n");
+                            fsm = UIFSM.IDLE;
+                            oos.close();
+                            ois.close();
+                            serverSocket.close();
+                            break;
+                        }
+                        oos.close();
+                        ois.close();
+                        serverSocket.close();
+
+                        // --- Merge step (Assume there is only one version difference)
+                        // Find the breaking point and append the difference
+                        // Create a latest version at the end
+                        // Just append the value and choose one of them to be the latest
+                        Iterator newIterator = files.iterator();
+                        Iterator latestIterator = tempFiles.iterator();
+                        LinkedList<VersionData> latestList = null;
+                        LinkedList<VersionData> newList = null;
+                        while (latestIterator.hasNext() && newIterator.hasNext()){
+                            newList = (LinkedList<VersionData>)newIterator.next();
+                            latestList = (LinkedList<VersionData>)latestIterator.next();
+                            if(!(newList.getFirst().get_val() == latestList.getFirst().get_val())){
+                                latestList.add(newList.get(0));
+                            }
+                        }
+                        tempFiles.push(newList);
+                        files = tempFiles;
+                        msg = "Merge finished!\n";
+                        System.out.print(msg);
+
+                    }catch (java.io.IOException e){
+                        System.out.print("IOException: " + e.toString() + "\n");
+                    }catch (java.lang.ClassNotFoundException e){
+                        System.out.print("ClassNotFoundException\n");
                     }
                     fsm = UIFSM.IDLE;
                     break;
