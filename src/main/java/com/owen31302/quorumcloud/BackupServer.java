@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Created by owen on 3/9/17.
  */
-public class BackupServer{
+public class BackupServer implements TestCase{
 
     public static void main(String[] args){
         // --- Set ConcurrentHashMap as version control database
@@ -67,5 +67,17 @@ public class BackupServer{
         }catch (java.lang.ClassNotFoundException e){
             System.out.print("Class not found exception.\n");
         }
+    }
+
+    public void corruptValue() {
+
+    }
+
+    public void corruptTimestamp() {
+
+    }
+
+    public void shutDown() {
+
     }
 }

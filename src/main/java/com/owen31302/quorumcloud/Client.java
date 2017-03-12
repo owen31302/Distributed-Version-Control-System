@@ -22,6 +22,7 @@ public class Client {
         boolean metaServer = false;
         int userChoice;
 
+        // --- Check MetaServer is alive
         if (MetaServer.hostAvailabilityCheck(metaServerPort)){
             metaServer = true;
         }else{
@@ -29,6 +30,12 @@ public class Client {
             System.out.print(msg);
         }
 
+        // --- @ IDLE    : menu
+        // --- @ GET     : Download the specific file from the MetaServer
+        // --- @ WRITE   : Write the file
+        // --- @ Push    : Push the current file to MetaServer
+        // --- @ PrintAll: Print the current file content
+        // --- @ Merge   : Merge the current file with the file from MetaServer
         while(metaServer){
             switch (fsm){
                 case IDLE:
@@ -90,6 +97,9 @@ public class Client {
                     fsm = UIFSM.IDLE;
                     break;
                 case WRITE:
+                    // --- Check if there exist current file
+                    // --- New one if there is none
+                    // --- Give option if there exist the file
                     if(fileName == null){
                         msg = "New file.\n";
                         System.out.print(msg);

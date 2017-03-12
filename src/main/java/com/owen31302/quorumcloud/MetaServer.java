@@ -10,10 +10,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Created by owen on 3/9/17.
  */
-public class MetaServer implements Serializable {
+public class MetaServer implements Serializable,TestCase {
     public static void main(String[] args){
 
-        UIFSM fsm  = UIFSM.INITIALRETRIEVE;
         TimeStamp timestamp = new TimeStamp(new Long(0));
         String msg;
         String filename;
@@ -25,7 +24,6 @@ public class MetaServer implements Serializable {
         ArrayList<Long> timestamps;
         ObjectOutputStream oos;
         ObjectInputStream ois;
-        HashSet<Integer> randomPorts;
 
         // -- MetaServer Setup
         msg = "GET the git from the BackupServer.\n";
@@ -33,10 +31,9 @@ public class MetaServer implements Serializable {
         listGit = new ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>>();
         timestamps = new ArrayList<Long>();
 
-        // --- Select half of the random ports and get their value
-        randomPorts = RandomPorts(HostPort.count, false);
+        // --- When MetaServer starts, it will asking all Quorum for the latest git file
         for (HostPort port : HostPort.values()) {
-            if( randomPorts.contains( port.getValue()) && hostAvailabilityCheck(port.getValue())){
+            if( hostAvailabilityCheck(port.getValue())){
                 try{
                     Socket serverSocket = new Socket("localhost", port.getValue());
                     oos = new ObjectOutputStream(serverSocket.getOutputStream());
@@ -156,6 +153,7 @@ public class MetaServer implements Serializable {
         }
     }
 
+    // --- hostAvailabilityCheck is to check the status of the server
     public static boolean hostAvailabilityCheck(int port)
     {
         Socket s;
@@ -179,6 +177,7 @@ public class MetaServer implements Serializable {
         return true;
     }
 
+    // --- checkLatestGit is to get the latest git file
     public static ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> checkLatestGit(ArrayList<Long> timestamps, ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>> listGit, TimeStamp timestamp){
         if(listGit.size() == 0){
             return null;
@@ -197,6 +196,7 @@ public class MetaServer implements Serializable {
         return listGit.get(index);
     }
 
+    // --- printAllGit is to print all the files in the git file
     public static void printAllGit(ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git){
         for(Map.Entry files:git.entrySet()){
             System.out.print("Filename: " + files.getKey() + "\n");
@@ -221,6 +221,9 @@ public class MetaServer implements Serializable {
         }
     }
 
+    // --- RandomPorts is to randomly choose half ports in the network
+    // --- Write quorum needs at least n/2 +1
+    // --- Read quorum needs at least n/2
     public static HashSet<Integer> RandomPorts(int size, boolean write){
         int half;
         if(write){
@@ -237,6 +240,7 @@ public class MetaServer implements Serializable {
         return nums;
     }
 
+    // --- pushToBackupServer is to push the current git file to the BackupServer
     public static void pushToBackupServer(TimeStamp timestamp, ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git){
         timestamp.set_time(System.currentTimeMillis());
         HashSet<Integer> randomPorts = RandomPorts(HostPort.count, true);
@@ -256,5 +260,17 @@ public class MetaServer implements Serializable {
                 }
             }
         }
+    }
+
+    public void corruptValue() {
+
+    }
+
+    public void corruptTimestamp() {
+
+    }
+
+    public void shutDown() {
+
     }
 }
