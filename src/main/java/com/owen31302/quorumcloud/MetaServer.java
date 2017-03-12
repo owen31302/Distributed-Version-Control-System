@@ -11,15 +11,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * Created by owen on 3/9/17.
  */
 public class MetaServer implements Serializable,TestCase {
-    public static void main(String[] args){
+    private static ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> _git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
+    private static TimeStamp _timestamp = new TimeStamp(new Long(0));
 
-        TimeStamp timestamp = new TimeStamp(new Long(0));
+    public static void main(String[] args){
         String msg;
         String filename;
         int metaServerPort = 12345;
 
         // --- Set ConcurrentHashMap as version control database
-        ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
+
         ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>> listGit;
         ArrayList<Long> timestamps;
         ObjectOutputStream oos;
@@ -50,18 +51,20 @@ public class MetaServer implements Serializable,TestCase {
                 }catch (java.lang.ClassNotFoundException e){
                     System.out.print("ClassNotFoundException. \n");
                 }
-            }else{
-                System.out.print("Cannot connect to " + port.getValue() + "\n");
             }
         }
-        git = checkLatestGit(timestamps, listGit, timestamp);
-        if(git == null){
-            git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
-            timestamp.set_time(System.currentTimeMillis());
+        _git = checkLatestGit(timestamps, listGit, _timestamp);
+        if(_git == null){
+            _git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
+            _timestamp.set_time(System.currentTimeMillis());
         }
         System.out.print("Print all git\n");
-        System.out.print("Timestamp: " + timestamp.get_time()+ "\n");
-        printAllGit(git);
+        System.out.print("Timestamp: " + _timestamp.get_time()+ "\n");
+        printAllGit(_git);
+
+        // --- Start ping logic
+        Thread pingThread = new Thread(new PingImpl());
+        pingThread.start();
 
         // --- MetaServer is for handing user request and save the latest version list to the BackupServer
         // --- @GET: Send the whole list of versions to Client
@@ -85,10 +88,10 @@ public class MetaServer implements Serializable,TestCase {
 
                     case RequestType.GET:
                         filename = ois.readUTF();
-                        if(git.containsKey(filename)){
+                        if(_git.containsKey(filename)){
                             System.out.print("File name existed. \n");
                             oos.writeBoolean(true);
-                            oos.writeObject(git.get(filename));
+                            oos.writeObject(_git.get(filename));
                             oos.flush();
                             oos.close();
                             clientSocket.close();
@@ -103,12 +106,12 @@ public class MetaServer implements Serializable,TestCase {
                     case RequestType.PUSH:
                         filename = ois.readUTF();
                         Stack<LinkedList<VersionData>> versionList = (Stack<LinkedList<VersionData>>)ois.readObject();
-                        if(git.containsKey(filename)){
+                        if(_git.containsKey(filename)){
                             System.out.print("Update a version list.\n");
 
                             // --- Check if the new list can be accepted to save to the main branch.
                             // --- Use iterator to if new list contains all of the latest nodes.
-                            Iterator latestIterator = git.get(filename).iterator();
+                            Iterator latestIterator = _git.get(filename).iterator();
                             Iterator newIterator = versionList.iterator();
                             boolean mismatch = false;
                             while (latestIterator.hasNext() && newIterator.hasNext()){
@@ -126,22 +129,22 @@ public class MetaServer implements Serializable,TestCase {
                                 oos.close();
                             }else{
                                 System.out.print("Pushed to the main branch.\n");
-                                git.put(filename, versionList);
+                                _git.put(filename, versionList);
 
                                 // --- Push to BackupServer
-                                pushToBackupServer(timestamp, git);
+                                pushToBackupServer(_timestamp, _git);
                                 oos.writeBoolean(true);
                                 oos.flush();
                                 oos.close();
                             }
                         }else {
                             System.out.print("Got a new version list.\n");
-                            git.put(filename, versionList);
+                            _git.put(filename, versionList);
                             oos.writeBoolean(true);
                             oos.flush();
 
                             // --- Push to BackupServer
-                            pushToBackupServer(timestamp, git);
+                            pushToBackupServer(_timestamp, _git);
                         }
                         break;
                 }
@@ -221,6 +224,77 @@ public class MetaServer implements Serializable,TestCase {
         }
     }
 
+    public static void Test(){
+        ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git1 = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
+        ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git2 = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
+        VersionData v1 = new VersionData(11);
+        VersionData v2 = new VersionData(12);
+        VersionData v3 = new VersionData(12);
+        LinkedList<VersionData> version1  = new LinkedList<VersionData>();
+        version1.add(v1);
+        version1.add(v2);
+        LinkedList<VersionData> version2  = new LinkedList<VersionData>();
+        version2.add(v3);
+        Stack<LinkedList<VersionData>> versions1 = new Stack<LinkedList<VersionData>>();
+        versions1.push(version1);
+        versions1.push(version2);
+        git1.put("owen", versions1);
+
+        v1 = new VersionData(11);
+        v3 = new VersionData(13);
+        version1  = new LinkedList<VersionData>();
+        version1.add(v1);
+        version2  = new LinkedList<VersionData>();
+        version2.add(v3);
+        versions1 = new Stack<LinkedList<VersionData>>();
+        versions1.push(version1);
+        versions1.push(version2);
+
+        git2.put("owen", versions1);
+        if(gitMatch(git1, git2)){
+            System.out.print("YA\n");
+        }else{
+            System.out.print("No\n");
+        }
+    }
+
+    public static boolean gitMatch(ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git1, ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git2){
+        if(git1.size()!=git2.size()){
+            return false;
+        }
+        for(int i =0; i<git1.keySet().size(); i++){
+            if(!git1.keySet().toArray()[i].equals(git2.keySet().toArray()[i])){
+                return false;
+            }
+        }
+        for(String filename: git1.keySet()){
+            Stack<LinkedList<VersionData>> versions1 = git1.get(filename);
+            Stack<LinkedList<VersionData>> versions2 = git2.get(filename);
+            if(versions1.size() != versions2.size()){
+                return false;
+            }
+            Iterator stackIter1 = versions1.iterator();
+            Iterator stackIter2 = versions2.iterator();
+            while(stackIter1.hasNext()){
+                LinkedList<VersionData> version1 = (LinkedList<VersionData>)stackIter1.next();
+                LinkedList<VersionData> version2 = (LinkedList<VersionData>)stackIter2.next();
+                if(version1.size() != version2.size()){
+                    return false;
+                }
+                Iterator versionData1 = version1.iterator();
+                Iterator versionData2 = version2.iterator();
+                while (versionData1.hasNext()){
+                    VersionData data1 = (VersionData)versionData1.next();
+                    VersionData data2 = (VersionData)versionData2.next();
+                    if(data1.get_val() != data2.get_val()){
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
     // --- RandomPorts is to randomly choose half ports in the network
     // --- Write quorum needs at least n/2 +1
     // --- Read quorum needs at least n/2
@@ -260,6 +334,22 @@ public class MetaServer implements Serializable,TestCase {
                 }
             }
         }
+    }
+
+    public ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> get_git(){
+        return _git;
+    }
+
+    public void set_git(ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git){
+        _git = git;
+    }
+
+    public TimeStamp get_timestamp(){
+        return _timestamp;
+    }
+
+    public void set_timestamp(TimeStamp timestamp){
+        _timestamp = timestamp;
     }
 
     public void corruptValue() {
