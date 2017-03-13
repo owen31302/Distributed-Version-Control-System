@@ -9,28 +9,28 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by owen on 3/9/17.
+ *
+ * BackupServer is to store the git(ConcurrentHashMap) file on this local server.
+ * As well as hand the request from MetaServer.
  */
-public class BackupServer implements Runnable{
-    public int _arg;
-    public Long _timestamp = new Long(0);
+public class BackupServer{
 
-    public BackupServer(int arg){
-        _arg = arg;
-        _timestamp = new Long(0);
-    }
-
-    public void run() {
+    public static void main(String[] args){
         // --- Set ConcurrentHashMap as version control database
         ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
-
-        int serverPort = 10000 + _arg;
+        int arg = Integer.valueOf(args[0]);
+        Long _timestamp = new Long(0);
+        int serverPort = 10000 + arg;
 
 
         // --- Setup Server --- //
         // Register service on specific port
-        // --- @CHECKCONNECTION: Receive the ping from MetaServer
-        // --- @GET: Send the whole git to the MetaServer
-        // --- @SET: Set the git
+        // --- @CHECKCONNECTION  : Receive the ping from MetaServer
+        // --- @GET              : Send the whole git to the MetaServer
+        // --- @SET              : Set the git
+        // --- @CORRUPT_VALUE    : Set the corrupted value to its git
+        // --- @SHUTDOWN         : Simulate the crash mode and restart as a empty BackupServer
+        // --- @CORRUPT_TIMESTAMP: Set the corrupted timestamp
         System.out.print("Server running on port " + serverPort + "\n");
         try {
             while (true){
@@ -67,22 +67,27 @@ public class BackupServer implements Runnable{
                             System.out.print("Server running on port " + serverPort + " Timestamp: " + _timestamp+ "\n");
                             MetaServer.printAllGit(git);
                             break;
+
                         case RequestType.CORRUPT_VALUE:
                             obj = ois.readObject();
                             git = (ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>)obj;
                             System.out.print("CORRUPT_VALUE:\n");
                             MetaServer.printAllGit(git);
                             break;
+
                         case RequestType.SHUTDOWN:
                             serverSocket.close();
                             System.out.print("SHUTDOWN @"+serverPort + "\n");
                             break;
+
                         case RequestType.CORRUPT_TIMESTAMP:
                             _timestamp = new Long((int)(10000*Math.random()));
                             System.out.print("CORRUPT_TIMESTAMP: "+ _timestamp+"\n");
                             break;
                     }
                 }
+
+                // --- SHUTDOWN Mode
                 System.out.print("Restarting after 5s... \n");
                 Thread.sleep(5000);
                 _timestamp = new Long(0);

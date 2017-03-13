@@ -67,6 +67,7 @@ public class Client {
                         System.out.print("Please enter 1 - 4.\n");
                     }
                     break;
+
                 case GET:
                     try{
                         serverSocket = new Socket("localhost", metaServerPort);
@@ -96,6 +97,7 @@ public class Client {
                     }
                     fsm = UIFSM.IDLE;
                     break;
+
                 case WRITE:
                     // --- Check if there exist current file
                     // --- New one if there is none
@@ -147,6 +149,7 @@ public class Client {
                             break;
                     }
                     break;
+
                 case PUSH:
                     msg = "Pushing the file... \n";
                     System.out.print(msg);
@@ -175,6 +178,7 @@ public class Client {
                     }
                     fsm = UIFSM.IDLE;
                     break;
+
                 case PRINTALL:
                     if(files == null){
                         System.out.print("No file existed.\n");
@@ -191,6 +195,7 @@ public class Client {
                     }
                     fsm = UIFSM.IDLE;
                     break;
+
                 case MERGE:
                     try {
                         // --- Get the latest version from the server

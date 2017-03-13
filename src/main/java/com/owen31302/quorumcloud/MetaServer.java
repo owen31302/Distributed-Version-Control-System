@@ -9,6 +9,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by owen on 3/9/17.
+ *
+ * MetaServer insures the data consistency by
+ * as well as stores the backup git on the BackupServer.
  */
 public class MetaServer implements Serializable {
     private static ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> _git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
@@ -30,8 +33,6 @@ public class MetaServer implements Serializable {
         // -- MetaServer Setup
         msg = "GET the git from the BackupServer.\n";
         System.out.print(msg);
-        listGit = new ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>>();
-        timestamps = new ArrayList<Long>();
 
         // --- When MetaServer starts, it will asking all Quorum for the latest git file
         listGit = new ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>>();
@@ -56,7 +57,6 @@ public class MetaServer implements Serializable {
                 }
             }
 
-            System.out.print("listGit.size(): " + listGit.size()+"\n");
             outerloop:
             for(int i = 0; i<listGit.size()-1;i++){
                 for(int j = i+1; j<listGit.size(); j++){
@@ -78,7 +78,7 @@ public class MetaServer implements Serializable {
         System.out.print("Timestamp: " + _timestamp.get_time()+ "\n");
         printAllGit(_git);
 
-        // --- Start ping logic
+        // --- Start ping thread
         Thread pingThread = new Thread(new PingImpl());
         pingThread.start();
 
@@ -364,15 +364,4 @@ public class MetaServer implements Serializable {
         return _userPush;
     }
 
-    public void corruptValue() {
-
-    }
-
-    public void corruptTimestamp() {
-
-    }
-
-    public void shutDown() {
-
-    }
 }

@@ -10,21 +10,19 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by owen on 3/12/17.
+ *
+ * BackupServerController is used for testing:
+ * (1) Corrupt the data on the BackupServer
+ * (2) Shutdown the BackupServer randomly.
  */
+
 public class BackupServerController {
     public static void main(String[] args){
         UIFSM fsm  = UIFSM.IDLE;
         String msg;
         Scanner userInput = new Scanner(System.in);
         ObjectOutputStream oos;
-        ObjectInputStream ois;
         Socket serverSocket;
-
-        Thread[] backupServers = new Thread[5];
-        for(int i = 0; i<backupServers.length; i++){
-            backupServers[i] = new Thread(new BackupServer(i));
-            backupServers[i].start();
-        }
 
         try{
             while (true){
@@ -48,10 +46,11 @@ public class BackupServerController {
                             System.out.print(msg);
                         }
                         break;
+
                     case CORRUPT_TIMESTAMP:
                         int port = ((int)(Math.random()*10))%6;
                         serverSocket = new Socket("localhost", 10000 + port);
-                        msg = "CORRUPT_TIMESTAMP at port: " + 1000+port +"\n";
+                        msg = "CORRUPT_TIMESTAMP at port: " + 1000 + port +"\n";
                         System.out.print(msg);
                         oos = new ObjectOutputStream(serverSocket.getOutputStream());
                         oos.writeInt(RequestType.CORRUPT_TIMESTAMP);
@@ -60,6 +59,7 @@ public class BackupServerController {
                         serverSocket.close();
                         fsm = UIFSM.IDLE;
                         break;
+
                     case CORRUPT_VALUE:
                         ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> fakeGit = getCorruptHashMap();
                         port = ((int)(Math.random()*10))%6;
@@ -74,6 +74,7 @@ public class BackupServerController {
                         serverSocket.close();
                         fsm = UIFSM.IDLE;
                         break;
+
                     case SHUTDOWN:
                         port = ((int)(Math.random()*10))%6;
                         serverSocket = new Socket("localhost", 10000 + port);
@@ -93,6 +94,7 @@ public class BackupServerController {
         }
     }
 
+    // --- This is for simulating the corrupted data.
     public static ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> getCorruptHashMap(){
         ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git1 = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
         ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git2 = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();

@@ -11,6 +11,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by owen on 3/11/17.
+ * This thread is for auto correction process:
+ * 1. Fixing corrupted data.
+ * 2. Help preserving the data for cashed BackupServer.
  */
 public class PingImpl implements Runnable {
 
@@ -25,6 +28,13 @@ public class PingImpl implements Runnable {
         ArrayList<Integer> listPorts;
         HashSet<Integer> errorPorts;
 
+        // --- This is for pinging process:
+        // --- We randomly pick 3 port in this five node scenario.
+        // --- If there is one identical git version as well as the timestamp,
+        // --- we claimed that we have the latest data in cache (MetaServer)
+        // --- Therefore, we can use the cached file to restore the corrupted data
+        // --- On the other hand, if we can not find any matching git and timestamp
+        // --- in this case, we have to ask all the node in this system to find the majority data
         while (true){
             if(!MetaServer.get_userPush()){
                 try{
@@ -72,9 +82,24 @@ public class PingImpl implements Runnable {
                         index++;
                     }
 
-                    // There is no match, pingAll
-                    // Find the correct answer and
-                    if(errorPorts.size() == 3){
+
+                    // If we can find the correct git & timestamp, update the rest of the data (1-2)
+                    // There is no such matching, ping all and find the majority
+                    if(errorPorts.size() != 3){
+                        // --- correct
+                        for (HostPort port : HostPort.values()) {
+                            if(errorPorts.contains( port.getValue()) && MetaServer.hostAvailabilityCheck(port.getValue())){
+                                Socket backupServerSocket = new Socket("localhost", port.getValue());
+                                ObjectOutputStream oosBackupServer = new ObjectOutputStream(backupServerSocket.getOutputStream());
+                                oosBackupServer.writeInt(RequestType.SET);
+                                oosBackupServer.writeLong(tempTimestamp);
+                                oosBackupServer.writeObject(tempGit);
+
+                                oosBackupServer.close();
+                                backupServerSocket.close();
+                            }
+                        }
+                    }else{
                         listGit = new ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>>();
                         timestamps = new ArrayList<Long>();
                         for (HostPort port : HostPort.values()) {
@@ -117,19 +142,6 @@ public class PingImpl implements Runnable {
                                 }
                             }
                         }
-                    }else{
-                        for (HostPort port : HostPort.values()) {
-                            if(errorPorts.contains( port.getValue()) && MetaServer.hostAvailabilityCheck(port.getValue())){
-                                Socket backupServerSocket = new Socket("localhost", port.getValue());
-                                ObjectOutputStream oosBackupServer = new ObjectOutputStream(backupServerSocket.getOutputStream());
-                                oosBackupServer.writeInt(RequestType.SET);
-                                oosBackupServer.writeLong(tempTimestamp);
-                                oosBackupServer.writeObject(tempGit);
-
-                                oosBackupServer.close();
-                                backupServerSocket.close();
-                            }
-                        }
                     }
 
                     Thread.sleep(5000);
@@ -155,7 +167,6 @@ public class PingImpl implements Runnable {
                     oosBackupServer.writeInt(RequestType.SET);
                     oosBackupServer.writeLong(timestamp.get_time());
                     oosBackupServer.writeObject(git);
-
                     oosBackupServer.close();
                     backupServerSocket.close();
                 } catch (java.io.IOException e) {
