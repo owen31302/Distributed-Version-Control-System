@@ -10,28 +10,35 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Created by owen on 3/9/17.
  */
-public class BackupServer implements TestCase{
+public class BackupServer implements Runnable{
+    public int _arg;
+    public Long _timestamp = new Long(0);
 
-    public static void main(String[] args){
+    public BackupServer(int arg){
+        _arg = arg;
+        _timestamp = new Long(0);
+    }
+
+    public void run() {
         // --- Set ConcurrentHashMap as version control database
-        ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git = null;
+        ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
 
-        int serverPort = 10000+Integer.parseInt(args[0]);
-        Long timestamp = new Long(0);
+        int serverPort = 10000 + _arg;
+
 
         // --- Setup Server --- //
         // Register service on specific port
         // --- @CHECKCONNECTION: Receive the ping from MetaServer
         // --- @GET: Send the whole git to the MetaServer
         // --- @SET: Set the git
-        System.out.print("Server ini process.\n");
+        System.out.print("Server running on port " + serverPort + "\n");
         try {
 
             ServerSocket serverSocket = new ServerSocket(serverPort);
             while(!serverSocket.isClosed()){
                 // Wait and accept a connection
                 Socket clientSocket = serverSocket.accept();
-                System.out.print("I got a client\n");
+                //System.out.print("I got a client\n");
 
                 // Get a communication stream associated with the socket
                 ObjectInputStream ois = new ObjectInputStream(clientSocket.getInputStream());
@@ -43,22 +50,30 @@ public class BackupServer implements TestCase{
                         break;
 
                     case RequestType.INITIALRETRIEVE:
-                        oos.writeLong(timestamp);
+                        oos.writeLong(_timestamp);
                         oos.writeObject(git);
                         oos.flush();
                         break;
 
                     case RequestType.SET:
-                        timestamp = ois.readLong();
+                        System.out.print("Server running on port " + serverPort + " Timestamp: " + _timestamp+ "\n");
+                        _timestamp = ois.readLong();
                         Object obj = ois.readObject();
-
                         if(obj instanceof ConcurrentHashMap){
                             git = (ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>)obj;
                         }else{
                             System.out.print("ConcurrentHashMap conversion error.\n");
                         }
-                        System.out.print("Timestamp: " + timestamp+ "\n");
-                        MetaServer.printAllGit(git);
+                        System.out.print("Server running on port " + serverPort + " Timestamp: " + _timestamp+ "\n");
+                        //MetaServer.printAllGit(git);
+                        break;
+                    case RequestType.CORRUPT_VALUE:
+                        break;
+                    case RequestType.SHUTDOWN:
+                        break;
+                    case RequestType.CORRUPT_TIMESTAMP:
+                        _timestamp = new Long(100);
+                        System.out.print("CORRUPT_TIMESTAMP: "+ _timestamp+"\n");
                         break;
                 }
             }
@@ -67,17 +82,5 @@ public class BackupServer implements TestCase{
         }catch (java.lang.ClassNotFoundException e){
             System.out.print("Class not found exception.\n");
         }
-    }
-
-    public void corruptValue() {
-
-    }
-
-    public void corruptTimestamp() {
-
-    }
-
-    public void shutDown() {
-
     }
 }

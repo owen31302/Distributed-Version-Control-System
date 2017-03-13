@@ -10,9 +10,10 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Created by owen on 3/9/17.
  */
-public class MetaServer implements Serializable,TestCase {
+public class MetaServer implements Serializable {
     private static ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> _git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
     private static TimeStamp _timestamp = new TimeStamp(new Long(0));
+    private static boolean _userPush = true;
 
     public static void main(String[] args){
         String msg;
@@ -33,30 +34,45 @@ public class MetaServer implements Serializable,TestCase {
         timestamps = new ArrayList<Long>();
 
         // --- When MetaServer starts, it will asking all Quorum for the latest git file
-        for (HostPort port : HostPort.values()) {
-            if( hostAvailabilityCheck(port.getValue())){
-                try{
+        listGit = new ArrayList<ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>>();
+        timestamps = new ArrayList<Long>();
+        try{
+            for (HostPort port : HostPort.values()) {
+                if( MetaServer.hostAvailabilityCheck(port.getValue())){
                     Socket serverSocket = new Socket("localhost", port.getValue());
                     oos = new ObjectOutputStream(serverSocket.getOutputStream());
                     ois = new ObjectInputStream(serverSocket.getInputStream());
                     oos.writeInt(RequestType.INITIALRETRIEVE);
                     oos.flush();
-                    timestamps.add(ois.readLong());
-                    listGit.add((ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>)ois.readObject());
+                    Long tempTime = ois.readLong();
+                    Object tempObj = ois.readObject();
+                    if(tempObj != null){
+                        timestamps.add(tempTime);
+                        listGit.add((ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>)tempObj);
+                    }
                     ois.close();
                     oos.close();
                     serverSocket.close();
-                }catch (java.io.IOException e){
-                    System.out.print("Can not send msg to " + port.getValue() + "\n");
-                }catch (java.lang.ClassNotFoundException e){
-                    System.out.print("ClassNotFoundException. \n");
                 }
             }
-        }
-        _git = checkLatestGit(timestamps, listGit, _timestamp);
-        if(_git == null){
-            _git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
-            _timestamp.set_time(System.currentTimeMillis());
+
+            System.out.print("listGit.size(): " + listGit.size()+"\n");
+            outerloop:
+            for(int i = 0; i<listGit.size()-1;i++){
+                for(int j = i+1; j<listGit.size(); j++){
+                    if( timestamps.get(i).equals(timestamps.get(j)) &&
+                            MetaServer.gitMatch(listGit.get(i), listGit.get(j))){
+                        MetaServer.set_git(listGit.get(i));
+                        MetaServer.set_timestamp(new TimeStamp(timestamps.get(i)));
+                        System.out.print("Find the correct git!\n");
+                        break outerloop;
+                    }
+                }
+            }
+        }catch (java.io.IOException e){
+            System.out.print("IOException: " + e.toString() +"\n");
+        }catch (java.lang.ClassNotFoundException e){
+            System.out.print("ClassNotFoundException: " + e.toString() +"\n");
         }
         System.out.print("Print all git\n");
         System.out.print("Timestamp: " + _timestamp.get_time()+ "\n");
@@ -73,6 +89,7 @@ public class MetaServer implements Serializable,TestCase {
         try {
             ServerSocket serverSocket = new ServerSocket(metaServerPort);
             while(!serverSocket.isClosed()){
+                _userPush = false;
                 // Wait and accept a connection
                 Socket clientSocket = serverSocket.accept();
                 System.out.print("I got a client\n");
@@ -104,6 +121,7 @@ public class MetaServer implements Serializable,TestCase {
                         }
                         break;
                     case RequestType.PUSH:
+                        _userPush = true;
                         filename = ois.readUTF();
                         Stack<LinkedList<VersionData>> versionList = (Stack<LinkedList<VersionData>>)ois.readObject();
                         if(_git.containsKey(filename)){
@@ -146,6 +164,7 @@ public class MetaServer implements Serializable,TestCase {
                             // --- Push to BackupServer
                             pushToBackupServer(_timestamp, _git);
                         }
+                        _userPush = false;
                         break;
                 }
             }
@@ -259,6 +278,9 @@ public class MetaServer implements Serializable,TestCase {
     }
 
     public static boolean gitMatch(ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git1, ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git2){
+        if(git1 == null || git2 == null){
+            return false;
+        }
         if(git1.size()!=git2.size()){
             return false;
         }
@@ -336,20 +358,24 @@ public class MetaServer implements Serializable,TestCase {
         }
     }
 
-    public ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> get_git(){
+    public static ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> get_git(){
         return _git;
     }
 
-    public void set_git(ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git){
+    public static void set_git(ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git){
         _git = git;
     }
 
-    public TimeStamp get_timestamp(){
+    public static TimeStamp get_timestamp(){
         return _timestamp;
     }
 
-    public void set_timestamp(TimeStamp timestamp){
+    public static void set_timestamp(TimeStamp timestamp){
         _timestamp = timestamp;
+    }
+
+    public static boolean get_userPush(){
+        return _userPush;
     }
 
     public void corruptValue() {

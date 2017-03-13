@@ -5,6 +5,6 @@ package com.owen31302.quorumcloud;
  */
 public interface TestCase {
     void corruptValue();
-    void corruptTimestamp();
+    void corruptTimestamp(int t);
     void shutDown();
 }
