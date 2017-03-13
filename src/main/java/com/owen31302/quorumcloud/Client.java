@@ -18,7 +18,7 @@ public class Client {
         ObjectOutputStream oos;
         ObjectInputStream ois;
         Socket serverSocket;
-        int metaServerPort = 12345;
+        int metaServerPort = 10005;
         boolean metaServer = false;
         int userChoice;
 

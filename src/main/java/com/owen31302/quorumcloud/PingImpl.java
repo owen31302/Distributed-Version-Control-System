@@ -99,14 +99,21 @@ public class PingImpl implements Runnable {
                         System.out.print("listGit.size(): " + listGit.size()+"\n");
                         outerloop:
                         for(int i = 0; i<listGit.size()-1;i++){
+                            int cnt = 0;
                             for(int j = i+1; j<listGit.size(); j++){
                                 if( timestamps.get(i).equals(timestamps.get(j)) &&
                                         MetaServer.gitMatch(listGit.get(i), listGit.get(j))){
-                                    MetaServer.set_git(listGit.get(i));
-                                    MetaServer.set_timestamp(new TimeStamp(timestamps.get(i)));
-                                    System.out.print("Find the correct git!\n");
-                                    pushToBackupServer(new TimeStamp(timestamps.get(i)), listGit.get(i));
-                                    break outerloop;
+                                    cnt++;
+                                    if(cnt == 2){
+                                        MetaServer.set_git(listGit.get(i));
+                                        MetaServer.set_timestamp(new TimeStamp(timestamps.get(i)));
+                                        System.out.print("Find the correct git!\n");
+                                        System.out.print("MetaServer TIMESTAMP fixing: "+ MetaServer.get_timestamp().get_time()+"\n");
+                                        System.out.print("MetaServer Git fixing: \n");
+                                        MetaServer.printAllGit(MetaServer.get_git());
+                                        pushToBackupServer(new TimeStamp(timestamps.get(i)), listGit.get(i));
+                                        break outerloop;
+                                    }
                                 }
                             }
                         }

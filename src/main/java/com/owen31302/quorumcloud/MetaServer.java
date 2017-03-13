@@ -18,7 +18,7 @@ public class MetaServer implements Serializable {
     public static void main(String[] args){
         String msg;
         String filename;
-        int metaServerPort = 12345;
+        int metaServerPort = 10005;
 
         // --- Set ConcurrentHashMap as version control database
 
@@ -87,91 +87,111 @@ public class MetaServer implements Serializable {
         // --- @PUSH: Received push request, check if the version is the latest one, otherwise, reject the update
         System.out.print("Server ini process.\n");
         try {
-            ServerSocket serverSocket = new ServerSocket(metaServerPort);
-            while(!serverSocket.isClosed()){
-                _userPush = false;
-                // Wait and accept a connection
-                Socket clientSocket = serverSocket.accept();
-                System.out.print("I got a client\n");
 
-                // Get a communication stream associated with the socket
-                ois = new ObjectInputStream(clientSocket.getInputStream());
-                oos = new ObjectOutputStream(clientSocket.getOutputStream());
+            while (true){
+                ServerSocket serverSocket = new ServerSocket(metaServerPort);
+                while(!serverSocket.isClosed()){
+                    _userPush = false;
+                    // Wait and accept a connection
+                    Socket clientSocket = serverSocket.accept();
+                    System.out.print("I got a client\n");
 
-                int action = ois.readInt();
-                switch (action){
-                    case RequestType.CHECKCONNECTION:
-                        break;
+                    // Get a communication stream associated with the socket
+                    ois = new ObjectInputStream(clientSocket.getInputStream());
+                    oos = new ObjectOutputStream(clientSocket.getOutputStream());
 
-                    case RequestType.GET:
-                        filename = ois.readUTF();
-                        if(_git.containsKey(filename)){
-                            System.out.print("File name existed. \n");
-                            oos.writeBoolean(true);
-                            oos.writeObject(_git.get(filename));
-                            oos.flush();
-                            oos.close();
-                            clientSocket.close();
-                        }else{
-                            System.out.print("No such file name existed. \n");
-                            oos.writeBoolean(false);
-                            oos.flush();
-                            oos.close();
-                            clientSocket.close();
-                        }
-                        break;
-                    case RequestType.PUSH:
-                        _userPush = true;
-                        filename = ois.readUTF();
-                        Stack<LinkedList<VersionData>> versionList = (Stack<LinkedList<VersionData>>)ois.readObject();
-                        if(_git.containsKey(filename)){
-                            System.out.print("Update a version list.\n");
+                    int action = ois.readInt();
+                    switch (action){
+                        case RequestType.CHECKCONNECTION:
+                            break;
 
-                            // --- Check if the new list can be accepted to save to the main branch.
-                            // --- Use iterator to if new list contains all of the latest nodes.
-                            Iterator latestIterator = _git.get(filename).iterator();
-                            Iterator newIterator = versionList.iterator();
-                            boolean mismatch = false;
-                            while (latestIterator.hasNext() && newIterator.hasNext()){
-                                LinkedList<VersionData> newList = (LinkedList<VersionData>)newIterator.next();
-                                LinkedList<VersionData> latestList = (LinkedList<VersionData>)latestIterator.next();
-                                if(!(newList.getFirst().get_val() == latestList.getFirst().get_val())){
-                                    mismatch = true;
-                                    break;
-                                }
-                            }
-                            if(mismatch){
-                                System.out.print("Version conflict.\n");
+                        case RequestType.GET:
+                            filename = ois.readUTF();
+                            if(_git.containsKey(filename)){
+                                System.out.print("File name existed. \n");
+                                oos.writeBoolean(true);
+                                oos.writeObject(_git.get(filename));
+                                oos.flush();
+                                oos.close();
+                                clientSocket.close();
+                            }else{
+                                System.out.print("No such file name existed. \n");
                                 oos.writeBoolean(false);
                                 oos.flush();
                                 oos.close();
-                            }else{
-                                System.out.print("Pushed to the main branch.\n");
+                                clientSocket.close();
+                            }
+                            break;
+                        case RequestType.PUSH:
+                            _userPush = true;
+                            filename = ois.readUTF();
+                            Stack<LinkedList<VersionData>> versionList = (Stack<LinkedList<VersionData>>)ois.readObject();
+                            if(_git.containsKey(filename)){
+                                System.out.print("Update a version list.\n");
+
+                                // --- Check if the new list can be accepted to save to the main branch.
+                                // --- Use iterator to if new list contains all of the latest nodes.
+                                Iterator latestIterator = _git.get(filename).iterator();
+                                Iterator newIterator = versionList.iterator();
+                                boolean mismatch = false;
+                                while (latestIterator.hasNext() && newIterator.hasNext()){
+                                    LinkedList<VersionData> newList = (LinkedList<VersionData>)newIterator.next();
+                                    LinkedList<VersionData> latestList = (LinkedList<VersionData>)latestIterator.next();
+                                    if(!(newList.getFirst().get_val() == latestList.getFirst().get_val())){
+                                        mismatch = true;
+                                        break;
+                                    }
+                                }
+                                if(mismatch){
+                                    System.out.print("Version conflict.\n");
+                                    oos.writeBoolean(false);
+                                    oos.flush();
+                                    oos.close();
+                                }else{
+                                    System.out.print("Pushed to the main branch.\n");
+                                    _git.put(filename, versionList);
+
+                                    // --- Push to BackupServer
+                                    pushToBackupServer(_timestamp, _git);
+                                    oos.writeBoolean(true);
+                                    oos.flush();
+                                    oos.close();
+                                }
+                            }else {
+                                System.out.print("Got a new version list.\n");
                                 _git.put(filename, versionList);
+                                oos.writeBoolean(true);
+                                oos.flush();
 
                                 // --- Push to BackupServer
                                 pushToBackupServer(_timestamp, _git);
-                                oos.writeBoolean(true);
-                                oos.flush();
-                                oos.close();
                             }
-                        }else {
-                            System.out.print("Got a new version list.\n");
-                            _git.put(filename, versionList);
-                            oos.writeBoolean(true);
-                            oos.flush();
-
-                            // --- Push to BackupServer
-                            pushToBackupServer(_timestamp, _git);
-                        }
-                        _userPush = false;
-                        break;
+                            _userPush = false;
+                            break;
+                        case RequestType.CORRUPT_TIMESTAMP:
+                            _timestamp = new TimeStamp(new Long((int)(10000*Math.random())));
+                            System.out.print("MetaServer CORRUPT_TIMESTAMP: "+ _timestamp.get_time()+"\n");
+                            break;
+                        case RequestType.CORRUPT_VALUE:
+                            Object obj = ois.readObject();
+                            _git = (ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>)obj;
+                            System.out.print("CORRUPT_VALUE:\n");
+                            MetaServer.printAllGit(_git);
+                            break;
+                    }
                 }
+                System.out.print("Restarting after 5s... \n");
+                Thread.sleep(5000);
+                _timestamp = new TimeStamp(new Long(0));
+                _git = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
+                System.out.print("BackupServer @port " + metaServerPort+" back!\n");
             }
         }catch (java.io.IOException e){
             System.out.print("IOException: " + e.toString() +"\n");
         }catch (java.lang.ClassNotFoundException e){
             System.out.print("ClassNotFoundException: " + e.toString() +"\n");
+        }catch (java.lang.InterruptedException e){
+            System.out.print("InterruptedException.\n");
         }
     }
 
@@ -240,40 +260,6 @@ public class MetaServer implements Serializable {
                 }
                 cnt++;
             }
-        }
-    }
-
-    public static void Test(){
-        ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git1 = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
-        ConcurrentHashMap<String, Stack<LinkedList<VersionData>>> git2 = new ConcurrentHashMap<String, Stack<LinkedList<VersionData>>>();
-        VersionData v1 = new VersionData(11);
-        VersionData v2 = new VersionData(12);
-        VersionData v3 = new VersionData(12);
-        LinkedList<VersionData> version1  = new LinkedList<VersionData>();
-        version1.add(v1);
-        version1.add(v2);
-        LinkedList<VersionData> version2  = new LinkedList<VersionData>();
-        version2.add(v3);
-        Stack<LinkedList<VersionData>> versions1 = new Stack<LinkedList<VersionData>>();
-        versions1.push(version1);
-        versions1.push(version2);
-        git1.put("owen", versions1);
-
-        v1 = new VersionData(11);
-        v3 = new VersionData(13);
-        version1  = new LinkedList<VersionData>();
-        version1.add(v1);
-        version2  = new LinkedList<VersionData>();
-        version2.add(v3);
-        versions1 = new Stack<LinkedList<VersionData>>();
-        versions1.push(version1);
-        versions1.push(version2);
-
-        git2.put("owen", versions1);
-        if(gitMatch(git1, git2)){
-            System.out.print("YA\n");
-        }else{
-            System.out.print("No\n");
         }
     }
 
