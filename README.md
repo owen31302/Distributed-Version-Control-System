@@ -1,4 +1,4 @@
-# Distributed-Version-Control-System
+# Distributed-Storage-on-Version-Control-System
 
 Goal - Build a Version Control System with distributed storage and self-repair mechanism which is consistent and fault-tolerant.
 
